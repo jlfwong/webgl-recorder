@@ -172,7 +172,12 @@
         }
 
         else {
-          fakeContext[key] = value;
+          (function(k) {
+            Object.defineProperty(fakeContext, k, {
+              get: function() { return context[k]; },
+              set: function(val) { context[k] = val; }
+            })
+          })(key)
         }
       }
 
