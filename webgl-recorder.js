@@ -14,6 +14,11 @@
 
   HTMLCanvasElement.prototype.getContext = function(type) {
     var canvas = this;
+
+    if (canvas.__recordingContext != null) {
+      return canvas.__recordingContext;
+    }
+
     var context = getContext.apply(canvas, arguments);
 
     if (type === 'webgl' || type === 'experimental-webgl') {
@@ -181,6 +186,7 @@
         }
       }
 
+      canvas.__recordingContext = fakeContext;
       return fakeContext;
     }
 
