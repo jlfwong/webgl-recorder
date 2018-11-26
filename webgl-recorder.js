@@ -26,10 +26,52 @@
         trace: trace,
         compileTrace: compileTrace,
         downloadTrace: downloadTrace,
+        pushTraceAnnotation: pushTraceAnnotation,
+        popTraceAnnotation: popTraceAnnotation,
+        withTraceAnnotation: withTraceAnnotation
       };
 
-      trace.push('  gl.canvas.width = ' + oldWidth + ';');
-      trace.push('  gl.canvas.height = ' + oldHeight + ';');
+      var indent = '  ';
+
+      function appendToTrace(text) {
+        trace.push(indent + text)
+      }
+
+      var annotations = [];
+      function pushTraceAnnotation(annotation) {
+        checkIfFrameNumberHasChanged();
+
+        appendToTrace('{ // ' + annotation);
+        annotations.push(annotation);
+        indent += '  '
+      }
+      function popTraceAnnotation(expected) {
+        if (annotations.length === 0) {
+          console.warn('Tried to pop annotation from empty annotation stack');
+          return
+        }
+        const popped = annotations.pop();
+        if (expected && popped !== expected) {
+          console.warn('Mismatched annotation push/pop: expected ' + expected + ' to be popped, but ' + popped + ' was at the top of the annotation stack');
+        }
+        indent = indent.substring(0, indent.length - 2);
+        appendToTrace('}');
+      }
+      function withTraceAnnotation(annotation, callback) {
+        pushTraceAnnotation(annotation)
+        callback()
+        popTraceAnnotation(annotation)
+      }
+
+      function checkIfFrameNumberHasChanged() {
+        if (frameSincePageLoad !== oldFrameCount) {
+          oldFrameCount = frameSincePageLoad;
+          appendToTrace('yield;');
+        }
+      }
+
+      appendToTrace('gl.canvas.width = ' + oldWidth + ';');
+      appendToTrace('gl.canvas.height = ' + oldHeight + ';');
 
       function compileTrace() {
         var text = 'function* render(gl) {\n';
@@ -86,16 +128,13 @@
               var result = value.apply(context, arguments);
               var args = [];
 
-              if (frameSincePageLoad !== oldFrameCount) {
-                oldFrameCount = frameSincePageLoad;
-                trace.push('  yield;');
-              }
+              checkIfFrameNumberHasChanged()
 
               if (canvas.width !== oldWidth || canvas.height !== oldHeight) {
                 oldWidth = canvas.width;
                 oldHeight = canvas.height;
-                trace.push('  gl.canvas.width = ' + oldWidth + ';');
-                trace.push('  gl.canvas.height = ' + oldHeight + ';');
+                appendToTrace('gl.canvas.width = ' + oldWidth + ';');
+                appendToTrace('gl.canvas.height = ' + oldHeight + ';');
               }
 
               for (var i = 0; i < arguments.length; i++) {
@@ -125,7 +164,7 @@
               var text = 'gl.' + key + '(' + args.join(', ') + ');';
               var variable = getVariable(result);
               if (variable !== null) text = variable + ' = ' + text;
-              trace.push('  ' + text);
+              appendToTrace(text);
 
               return result;
             };
